@@ -75,7 +75,7 @@ class DisplayBase:
         self.ui_height_chars = (
             ST7789V_ROWS - y2 - 2 * ST7789V_FONT_HEIGHT) // ST7789V_FONT_HEIGHT
         ui_border_x = (
-            ST7789V_COLS - self.ui_width_chars * ST7789V_FONT_WIDTH) / 2
+            ST7789V_COLS - self.ui_width_chars * ST7789V_FONT_WIDTH) // 2
         self.ui_top_left = (
             ui_border_x,
             ST7789V_ROWS - (self.ui_height_chars + 1) * ST7789V_FONT_HEIGHT)
@@ -93,10 +93,10 @@ class DisplayBase:
     def offset_to_x_y(self, offset):
         return offset % ST7789V_COLS, offset // ST7789V_COLS
     def ui_c_r_to_x_y(self, c, r):
-        return (self.ui_top_left[0] + c * ST7789V_FONT_WIDTH,
-                self.ui_top_left[1] + r * ST7789V_FONT_HEIGHT)
+        return (int(self.ui_top_left[0] + c * ST7789V_FONT_WIDTH),
+                int(self.ui_top_left[1] + r * ST7789V_FONT_HEIGHT))
     def _rowmajor_bitmap_to_image(self, b, width=8):
-        return Image.frombytes('1', (width, len(b) / (width / 8)), b)
+        return Image.frombytes('1', (int(width), int(len(b) // (width / 8))), b)
     def rgb_to_565(self, rgb):
         r = rgb[0] >> 3 & 0x1f
         g = rgb[1] >> 2 & 0x3f
@@ -150,7 +150,7 @@ class DisplayBase:
             # to avoid unnecessary RASET/CASET instructions, but skipping
             # large gaps that have not changed.
             max_gap_to_join = 4
-            first_col = last_col = cols[0]
+            first_col = last_col = int(cols[0])
             i = 1
             while i == 1 or i <= len(cols):
                 if i < len(cols) and cols[i] - last_col <= max_gap_to_join:
@@ -166,7 +166,7 @@ class DisplayBase:
                 # Convert the image to an array of bytes.
                 data = numpy.fromstring(strip.tobytes(), dtype=numpy.uint8)
                 # Convert from RGB888 (24-bit) to RGB565 (16-bit).
-                data565 = numpy.zeros((data.shape[0] / 3,), dtype=numpy.uint16)
+                data565 = numpy.zeros((int(data.shape[0] / 3),), dtype=numpy.uint16)
                 data565[:] += \
                     ((data[0::3] >> 3) & 0x1f).astype(numpy.uint16) << 11
                 data565[:] += \
@@ -176,7 +176,7 @@ class DisplayBase:
                 # Convert to big endian format if needed.
                 if sys.byteorder == 'little':
                     data565[:] = (data565[:] >> 8) + ((data565[:] & 0xff) << 8)
-                out = map(ord, data565.tobytes())
+                out = list(data565.tobytes())
 
                 # Set the write window, then send the actual data.
                 self.cmd_raset(row, row + strip_height - 1)
@@ -187,10 +187,14 @@ class DisplayBase:
 
                 # Update our image of the remote VRAM to reflect what we
                 # transmitted.
-                self.remote_vram.paste(strip, (start_x + first_col, row))
+                test_1 = (start_x + first_col)
+                test_2 = row
+                print(type(test_1))
+                print(type(test_2))
+                self.remote_vram.paste(strip, (int(start_x + first_col), int(row)))
 
                 if i < len(cols):
-                    first_col = last_col = cols[i]
+                    first_col = last_col = int(cols[i])
                 i += 1
 
             # Take a break at least every 50ms or 16KB transmitted to
@@ -225,7 +229,7 @@ class DisplayBase:
         if x + len(data) > width:
             data = data[:width - min(x, width)]
         for i, char in enumerate(data):
-            self.vram.paste(self.font[ord(char)], self.ui_c_r_to_x_y(x + i, y))
+            self.vram.paste(self.font[char], self.ui_c_r_to_x_y(x + i, y))
         self._invalidate(
             self.ui_c_r_to_x_y(x, y),
             (len(data) * ST7789V_FONT_WIDTH, ST7789V_FONT_HEIGHT))
@@ -272,10 +276,10 @@ class DisplayBase:
     def get_dimensions(self):
         return self.ui_width_chars, self.ui_height_chars
     def render_logo(self):
-        logo_width = ST7789V_COLS / 2
+        logo_width = ST7789V_COLS // 2
         if self.logo is None:
             self.logo = logo.make_logo(logo_width)
-        x_pos = (ST7789V_COLS - logo_width) / 2
+        x_pos = int((ST7789V_COLS - logo_width) // 2)
         y_pos = 0
         self.vram.paste(self.logo, box=(x_pos, y_pos), mask=self.logo)
         self._invalidate((x_pos, y_pos), self.logo.size)
@@ -326,6 +330,7 @@ class ST7789V(DisplayBase):
     def write_data(self, data):
         if data is None or len(data) == 0:
             return
+
         old_cs = self.cs_pin_state
         self.set_cs(0)
         self.set_rs(1)
@@ -339,9 +344,9 @@ class ST7789V(DisplayBase):
             data = data[max_length:]
         self.set_cs(old_cs)
     def cmd_caset(self, x, cx):
-        self.cmd(ST7789V_CMD_CASET, [x >> 8, x & 0xff, cx >> 8, cx & 0xff])
+        self.cmd(ST7789V_CMD_CASET, [int(x) >> int(8), int(x) & 0xff, int(cx) >> int(8), int(cx) & 0xff])
     def cmd_raset(self, y, cy):
-        self.cmd(ST7789V_CMD_RASET, [y >> 8, y & 0xff, cy >> 8, cy & 0xff])
+        self.cmd(ST7789V_CMD_RASET, [int(y) >> 8, int(y) & 0xff, int(cy) >> 8, int(cy) & 0xff])
     def init(self):
         mcu = self.mcu_reset.get_mcu()
         curtime = mcu.get_printer().get_reactor().monotonic()
